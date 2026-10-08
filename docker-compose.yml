@@ -1,0 +1,44 @@
+name: local-llm-log-processor
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    expose:
+      - "11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  model-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama"]
+    command: ["pull", "phi3:mini"]
+    restart: "no"
+
+  log-processor:
+    build: .
+    depends_on:
+      model-pull:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: phi3:mini
+    volumes:
+      - ./logs:/logs:ro
+      - ./reports:/reports
+    command: ["/logs", "--output", "/reports/analysis.json"]
+    restart: "no"
+
+volumes:
+  ollama-data:
